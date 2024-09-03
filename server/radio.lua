@@ -1,4 +1,4 @@
-formattedTime = "["..os.date("%H:%M:%S").."]"
+local formattedTime = "["..os.date("%H:%M:%S").."]"
 local function GetPlayerCharname(source)
     local Player = QBCore.Functions.GetPlayer(source)
     local PlayerName = Player.PlayerData.charinfo.firstname .. ' ' .. Player.PlayerData.charinfo.lastname
