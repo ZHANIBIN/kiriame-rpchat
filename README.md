@@ -1,16 +1,26 @@
-It just a simple chat script.It include the following function:\n
-Get QB player Name and print PlayerName and what they are saying like \n
-[hh:mm:ss]FirstName LastName:Something\n
-And in this time the script also including several function:\n
-Normal Saying \n
-/me [time]*name something\n
-/do [time]*something((name and id))\n
-/b  [time]((name:something))/\n
-/low\n
-/w\n
-/to \n
-/clear\n
-/duty(WIP)\n
-/f(jobchat also WIP)\n
-And All of the function above can print in the server console.With the player name and id and message.\n
-You can change the text by yourself by modify the server/main.lua\n
+markdown
+# Chat Script Features
+
+This script includes the following functions:
+
+## Basic Chat Display
+- Get QB player name and print it along with their message in the format:
+[hh:mm:ss] FirstName LastName: Something
+
+
+## Chat Commands
+- **Normal Saying**: Display a normal message.
+- **/me [time]*name something**: Perform an action with a name.
+- **/do [time]*something((name and id))**: Perform an action with a name and ID.
+- **/b [time]((name:something))/**: Broadcast a message with a name and additional information.
+- **/low**: Use for low-priority messages.
+- **/w**: Use for whisper messages.
+- **/to**: Use for directed messages.
+- **/clear**: Clear the chat display.
+- **/duty (WIP)**: Mark a player as on duty (Work in Progress).
+- **/f (jobchat also WIP)**: Use for job-related chat (Work in Progress).
+
+All of the functions above can print messages in the server console, including the player's name, ID, and message.
+
+## Customization
+You can change the text by modifying the `server/main.lua` file.
