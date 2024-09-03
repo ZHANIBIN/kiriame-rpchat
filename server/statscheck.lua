@@ -20,10 +20,8 @@ QBCore.Commands.Add('stats', "检查状态", {}, false, function(source)
     end
 
     if not identifier then
-        -- QBCore.Functions.Notify(source, '无法获取玩家标识符')
         return
     else
-        -- QBCore.Functions.Notify(source, '获取到的标识符: ' .. identifier)
     end
 
     local response = MySQL.query.await('SELECT `time` FROM `playtime` WHERE `identifier` = ?', { identifier })
@@ -126,4 +124,4 @@ QBCore.Commands.Add('stats', "检查状态", {}, false, function(source)
         multiline = true,
         args = { formattedTime .. " ========================================= " }
     })
-end, 'user')
+end， 'user')
