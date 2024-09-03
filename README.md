@@ -1,5 +1,5 @@
 # Important!
-#If you want use this script in a open public server please contact me.I only allow my script work on servers which have a great Role-playing quality
+If you want use this script in a open public server please contact me.I'm only allow my script work on servers which have a great Role-playing quality
 # Chat Script Features
 
 This script includes the following functions:
