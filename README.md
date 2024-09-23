@@ -21,3 +21,9 @@ All of the functions above can print messages in the server console, including t
 
 ## Customization
 You can change the text by modifying the `server/main.lua` file.
+
+## Update
+
+- **/ Now some command rely on the ox_lib
+- **/ Complete the Text Radio
+- 
