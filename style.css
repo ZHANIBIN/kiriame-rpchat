@@ -1,5 +1,5 @@
 .color {
-  color: #aa66cc;
+  color: #bba0d7;
 }
 
 .color-0 {
@@ -7,7 +7,7 @@
 }
 
 .color-1 {
-  color: #ff4444;
+  color: #ffffff;
 }
 
 .color-2 {
@@ -27,7 +27,7 @@
 }
 
 .color-6 {
-  color: #aa66cc;
+  color: #bba0d7  ;
 }
 
 .color-8 {
@@ -165,7 +165,7 @@ em {
   position: absolute;
 
   top: 50%;
-  left: 0%;
+  left: 1%;
   width: 38%;
   max-width: 1000px;
   box-sizing: border-box;
@@ -182,10 +182,12 @@ em {
   width: 100%;
   /*background-color: rgba(44, 62, 80, 1.0);*/
   background-color: rgba(0, 0, 0, 0.4) !important;
-  border-style: solid;
-  border: 2px solid black;
+  /* border-style: solid; */
+  /* border: 2px solid black; */
   border-radius: 5px;
-  border-color: white;
+    /* border-color: white; */
+  margin-left: calc(1 * 0.1vw); /* 向左移动屏幕宽度的1% */
+
 }
 
 .chat-hide-state {
@@ -245,11 +247,17 @@ input:focus {
   padding-left: 1.4%;
   font-size: 1.65vh;
   box-sizing: border-box;
-  color: white;
-  background-color: rgba(0, 0, 0, 0.4);
-  width: 100%;
-}
+  color: #fff;
+  background-color: #25262b;
+  height: 17%;
+  width: auto; /* 宽度自适应内容 */
+  overflow-wrap: break-word; /* 与 word-wrap 相同，但更现代的属性名 */
+  margin-top: calc(1 * 0.4vw); /* 向左移动屏幕宽度的1% */
 
+  margin-left: calc(1 * 0.1vw); /* 向左移动屏幕宽度的1% */
+  /* border: 1px solid #fff; 添加边框，替换 #someColor 为你想要的颜色 */
+  border-radius: 15px; /* 添加圆角，数值可以根据需要调整 */
+}
 /* .suggestions>li:first-child {
   background-color: rgba(200, 0, 0, 0.6);
 } */

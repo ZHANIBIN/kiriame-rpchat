@@ -1,6 +1,6 @@
 local QBCore = exports['qb-core']:GetCoreObject()
 
-local formattedTime = os.date("%H:%M:%S", currentTime)
+local formattedTime = "[" .. os.date("%H:%M:%S", currentTime) .. "]"
 
 
 QBCore.Commands.Add('stats', "检查状态", {}, false, function(source)
@@ -58,6 +58,16 @@ QBCore.Commands.Add('stats', "检查状态", {}, false, function(source)
         multiline = true,
         args = { formattedTime .. " ID: " .. source }
     })
+    -- TriggerClientEvent('chat:addMessage', source, {
+    --     color = Config.PrefixColor,
+    --     multiline = true,
+    --     args = { formattedTime ..  " " ..  "个人信息" .. GetPlayerCharname(source) .. " 性别:"..gender..' 公民身份证ID:'..citizenid }
+    -- })
+    -- TriggerClientEvent('chat:addMessage', source, {
+    --     color = Config.PrefixColor,
+    --     multiline = true,
+    --     args = { formattedTime .. '国籍:'..nationality..' 出生日期:'..birthdate}
+    -- })
     TriggerClientEvent('chat:addMessage', source, {
         color = Config.PrefixColor,
         multiline = true,
@@ -124,4 +134,4 @@ QBCore.Commands.Add('stats', "检查状态", {}, false, function(source)
         multiline = true,
         args = { formattedTime .. " ========================================= " }
     })
-end， 'user')
+end, 'user')
