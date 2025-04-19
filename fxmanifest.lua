@@ -1,24 +1,19 @@
 fx_version 'cerulean'
 game 'gta5'
 
-author 'ZHANIBIN'
-description 'Just a chat for gtar.Yes just so simple'
+author '桐雨绫华'
+description '一个基于文本的角色扮演聊天插件。是的，就这么简单'
 version '1.0.0'
 lua54 'yes'
 
 client_script {
-    'client/main.lua',
-    'client/autosaying.lua',
-    'client/radio.lua',
-
-
+    'client/**',
+    'client/nametag.lua'
 }
+
 server_script {
     '@oxmysql/lib/MySQL.lua',
-    'server/main.lua',
-    'server/statscheck.lua',
-    'server/autosaying.lua',
-    'server/radio.lua',
+    'server/**',
     'config.lua',
 }
 
@@ -29,9 +24,8 @@ files {
 shared_script {
     "shared/**",
     '@ox_lib/init.lua',
-  }
-  
-chat_theme 'gtarrpchat' {
-    styleSheet = 'style.css'
+}
 
+chat_theme 'kiriame_rpchat' {
+    styleSheet = 'style.css'
 }

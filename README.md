@@ -1,7 +1,7 @@
 This script includes the following functions:
 
 ## Basic Chat Display
-- Get QB player name and print it along with their message in the format:
+- Get QB player name and ServerDebugprint it along with their message in the format:
 [hh:mm:ss] FirstName LastName: Something
 
 
@@ -17,7 +17,7 @@ This script includes the following functions:
 - **/duty (WIP)**: Mark a player as on duty (Work in Progress).
 - **/f (jobchat also WIP)**: Use for job-related chat (Work in Progress).
 
-All of the functions above can print messages in the server console, including the player's name, ID, and message.
+All of the functions above can ServerDebugprint messages in the server console, including the player's name, ID, and message.
 
 ## Customization
 You can change the text by modifying the `server/main.lua` file.

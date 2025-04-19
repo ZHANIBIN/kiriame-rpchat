@@ -1,3 +1,4 @@
+/* credit by zhanibin */
 .color {
   color: #bba0d7;
 }
@@ -243,21 +244,21 @@ input:focus {
 
 .suggestions {
   list-style-type: none;
-  padding: 0.5%;
-  padding-left: 1.4%;
+  padding: 0.5% 0 0 1.4%;
   font-size: 1.65vh;
   box-sizing: border-box;
   color: #fff;
   background-color: #25262b;
   height: 17%;
-  width: auto; /* 宽度自适应内容 */
-  overflow-wrap: break-word; /* 与 word-wrap 相同，但更现代的属性名 */
-  margin-top: calc(1 * 0.4vw); /* 向左移动屏幕宽度的1% */
-
-  margin-left: calc(1 * 0.1vw); /* 向左移动屏幕宽度的1% */
-  /* border: 1px solid #fff; 添加边框，替换 #someColor 为你想要的颜色 */
-  border-radius: 15px; /* 添加圆角，数值可以根据需要调整 */
+  width: auto; /* 宽度根据内容自适应 */
+  overflow-wrap: break-word; /* 现代属性名，用于长单词的换行 */
+  margin-top: calc(0.4vw);
+  opacity: 0.9;
+  margin-left: calc(0.1vw);
+  border: 1px solid #fff;
+  /* border-radius: 1px; 如果需要圆角，可取消此行注释并调整数值 */
 }
+
 /* .suggestions>li:first-child {
   background-color: rgba(200, 0, 0, 0.6);
 } */

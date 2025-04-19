@@ -1,29 +1,35 @@
 Config = {}
 
--- Enable OOC Chat, if false all options below won't take effect
-Config.EnableChatOOC = true -- Default: true
+-- 开启OOC聊天，如果为false，以下所有选项将无效
+Config.EnableChatOOC = true -- 默认: true
 
--- Prefix and color
-Config.Prefix = '' -- Default: 'OOC | '
-Config.PrefixColor = { 255, 255, 255} -- Default: { 0, 0, 255}
+-- 前缀及颜色设置
+Config.Prefix = 'OOC | ' -- 默认: 'OOC | '
+Config.PrefixColor = { 255, 255, 255} -- 默认: { 0, 0, 255}
 
--- Change chat distance or make it global
-Config.ChatDistance = 20.0 -- Default: 20.0
-Config.EnableGlobalOOC = false -- Default: false
+-- 聊天距离及全局聊天设置
+Config.ChatDistance = 20.0 -- 默认: 20.0
+Config.EnableGlobalOOC = false -- 默认: false
 Config.WelcomeWord = "欢迎加入GTAR.CN全时段扮演文字语音混合角色社区,如果您需要新手帮助,请输入/guidebook,如果您有麻烦,请在KOOK或QQ群联系管理员"
-Config.Time = "["..os.date("%H:%M:%S").."]"
 
-Config.restrictchannel = {
-    ["BASE"] = 911, -- 当频率为 911 时，对应的键为 BASE
-    ["SPLX-1"] = 921,
-    ["SPLX-2"] = 922,
-    ["SPLX-3"] = 923,
-    ["SPLX-4"] = 924,
-    ["L-TAC1"] = 912,
-    ["L-TAC2"] = 909,
-    ["CED"] = 918,
-    ["DB-METRO"] = 907,
+-- 初始化时间格式化
+Config.Time = function()
+    return "[" .. os.date("%H:%M:%S") .. "]"
+end
 
+-- 限制频道设置
+Config.RestrictChannel = {
+    ["BASE"] = 911, -- 对应频率 911 的频道键
+    ["SPLX-1"] = 921, -- 特定频道
+    ["SPLX-2"] = 922, -- 特定频道
+    ["SPLX-3"] = 923, -- 特定频道
+    ["SPLX-4"] = 924, -- 特定频道
+    ["L-TAC1"] = 912, -- 特定频道
+    ["L-TAC2"] = 909, -- 特定频道
+    ["CED"] = 918, -- 特定频道
+    ["DB-METRO"] = 907, -- 特定频道
 }
 
+Config.MAX_RADIO_CHANNELS = 10
 
+Config.Debug = false -- 默认: false
