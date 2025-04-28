@@ -2,7 +2,7 @@
 
 lib.callback.register('kiriame_rpchat:server:getPlayers', function(source)
     local useMenu = 'mod'
-    if not IsPlayerAceAllowed(source, useMenu) then exports.qbx_core:Notify(source, locale('error.no_perms'), 'error') return end
+    -- if not IsPlayerAceAllowed(source, useMenu) then exports.qbx_core:Notify(source, locale('error.no_perms'), 'error') return end
 
     local players = {}
     for k, v in pairs(exports.qbx_core:GetQBPlayers()) do

@@ -1,11 +1,11 @@
-print('Loading nametag.lua')
+print('Loading nametag.lua\nI Love Galgame and Xiaogao!')
 
 -- 全局变量来存储显示名称标签的状态以及存储已创建的标签
 local showNames = true
 local gamerTags = {}
 
 -- 函数来更新玩家名称标签
-local function updateNametags()
+local function KiriameRPchat_UpdateNametags()
     local players = lib.callback.await('kiriame_rpchat:server:getPlayers', false)
     for _, player in pairs(players) do
         local playerId = GetPlayerFromServerId(player.id)
@@ -30,7 +30,7 @@ local function updateNametags()
 end
 
 -- 注册事件来显示或隐藏名称标签
-RegisterNetEvent('kiriame_rpchat:client:Show', function()
+RegisterNetEvent('kiriame_rpchat:client:toggleNametags', function()
     showNames = not showNames -- 切换显示状态
-    updateNametags() -- 更新名称标签
+    KiriameRPchat_UpdateNametags() -- 更新名称标签
 end)

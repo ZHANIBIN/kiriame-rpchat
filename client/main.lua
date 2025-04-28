@@ -1,11 +1,5 @@
 ---@diagnostic disable: missing-parameter
-print("zhanibin-rpchat loaded successfully\nLet's go and disrupt their language so they can't understand each other.")
-
-QBCore = exports['qb-core']:GetCoreObject()
-
-local Player = QBCore.Functions.GetPlayerData()
-local playerPed = PlayerPedId()
-local playerId = GetPlayerServerId(playerPed)
+print("kiriame-rpchat loaded successfully\nGo to, let us go down, and there confound their language, that they may not understand one another's speech.")
 
 QBCore = exports['qb-core']:GetCoreObject()
 
@@ -16,12 +10,12 @@ local playerId = GetPlayerServerId(playerPed)
 -- 客户端代码
 local currentTime = ""
 
-RegisterNetEvent('displayServerTime')
-AddEventHandler('displayServerTime', function(time)
+RegisterNetEvent('kiriame_rpchat:client:displayServerTime')
+AddEventHandler('kiriame_rpchat:client:displayServerTime', function(time)
     currentTime = time
 end)
 
-local function DrawServerInformation()
+local function KiriameRPchat_DrawServerInformation()
     -- 获取当前服务器上的玩家数量
     local currentPlayers = #GetActivePlayers()
 
@@ -51,17 +45,11 @@ end
 Citizen.CreateThread(function()
     while true do
         Citizen.Wait(0) -- 每帧调用一次
-        DrawServerInformation()
+        KiriameRPchat_DrawServerInformation()
     end
 end)
 
-
 RegisterCommand('clear', function()
     TriggerEvent('chat:clear')
 end, false)
 
-
-
-RegisterCommand('clear', function()
-    TriggerEvent('chat:clear')
-end, false)

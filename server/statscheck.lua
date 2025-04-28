@@ -1,70 +1,120 @@
 local QBCore = exports['qb-core']:GetCoreObject()
 
--- 获取格式化的时间
-local function getFormattedTime()
-    return "[" .. os.date("%H:%M:%S") .. "]"
-end
+-- 缓存玩家标识符
+local playerIdentifiers = {}
 
--- 获取玩家的标识符
+-- 获取玩家的标识符（带缓存）
 local function getPlayerIdentifier(source)
+    if playerIdentifiers[source] then
+        return playerIdentifiers[source]
+    end
+    
     for _, id in ipairs(GetPlayerIdentifiers(source)) do
         if string.sub(id, 1, string.len("license:")) == "license:" then
+            playerIdentifiers[source] = id
             return id
         end
     end
     return nil
 end
 
--- 获取玩家的游戏时间
+-- 缓存玩家游戏时间
+local playTimeCache = {}
+local CACHE_DURATION = 300 -- 5分钟缓存时间
+local lastCacheUpdate = {}
+
+-- 获取玩家的游戏时间（带缓存）
 local function getPlayerPlayTime(identifier)
-    local response = MySQL.query.await('SELECT `time` FROM `playtime` WHERE `identifier` = ?', { identifier })
-    if response and #response > 0 then
-        return response[1].time / 3600
+    local currentTime = os.time()
+    
+    if playTimeCache[identifier] and lastCacheUpdate[identifier] and 
+       (currentTime - lastCacheUpdate[identifier]) < CACHE_DURATION then
+        return playTimeCache[identifier]
     end
-    return 0
+    
+    local response = MySQL.query.await('SELECT `time` FROM `playtime` WHERE `identifier` = ?', { identifier })
+    local playTime = 0
+    if response and #response > 0 then
+        playTime = response[1].time / 3600
+    end
+    
+    playTimeCache[identifier] = playTime
+    lastCacheUpdate[identifier] = currentTime
+    return playTime
 end
 
--- 发送玩家信息到聊天
-local function sendPlayerInfoToChat(source, formattedTime, playerName, playTimeInHours, job, gang, money)
+-- 预定义消息模板
+local MESSAGE_TEMPLATES = {
+    header = " %s个人信息",
+    separator = " ========================================= ",
+    id = " ID: %s",
+    playtime = " 游戏时间: %d 小时",
+    job = " 工作: %s (级别: %s, 是否在职: %s)",
+    noJob = " 工作: None",
+    gang = " 帮派: %s (级别: %s)",
+    noGang = " 帮派: 没有",
+    cash = " 现金: %d",
+    bank = " 银行: %d",
+    noMoney = " 现金: 0\n 银行: 0"
+}
+
+-- 发送玩家信息到聊天（优化版）
+local function sendPlayerInfoToChat(source, playerName, playTimeInHours, job, gang, money)
     local messages = {
-         " " .. playerName .. "个人信息",
-         " ========================================= ",
-         " ID: " .. source,
-         " 游戏时间: " .. math.floor(playTimeInHours) .. " 小时"
+        string.format(MESSAGE_TEMPLATES.header, playerName),
+        MESSAGE_TEMPLATES.separator,
+        string.format(MESSAGE_TEMPLATES.id, source),
+        string.format(MESSAGE_TEMPLATES.playtime, math.floor(playTimeInHours))
     }
 
     if job then
-        table.insert(messages,  " 工作: " .. job.label .. " (级别: " .. job.grade.name .. ", 是否在职: " .. (job.onduty and "是" or "不是") .. ")")
+        table.insert(messages, string.format(MESSAGE_TEMPLATES.job, 
+            job.label, 
+            job.grade.name, 
+            job.onduty and "是" or "不是"))
     else
-        table.insert(messages,  " 工作: None")
+        table.insert(messages, MESSAGE_TEMPLATES.noJob)
     end
 
     if gang then
-        table.insert(messages,  " 帮派: " .. gang.label .. " (级别: " .. gang.grade.name .. ")")
+        table.insert(messages, string.format(MESSAGE_TEMPLATES.gang, 
+            gang.label, 
+            gang.grade.name))
     else
-        table.insert(messages,  " 帮派: 没有")
+        table.insert(messages, MESSAGE_TEMPLATES.noGang)
     end
 
     if money then
-        table.insert(messages,  " 现金: " .. (money['cash'] or 0))
-        table.insert(messages,  " 银行: " .. (money['bank'] or 0))
+        table.insert(messages, string.format(MESSAGE_TEMPLATES.cash, money['cash'] or 0))
+        table.insert(messages, string.format(MESSAGE_TEMPLATES.bank, money['bank'] or 0))
     else
-        table.insert(messages,  " 现金: 0")
-        table.insert(messages,  " 银行: 0")
+        table.insert(messages, MESSAGE_TEMPLATES.noMoney)
     end
 
-    table.insert(messages,  " ========================================= ")
+    table.insert(messages, MESSAGE_TEMPLATES.separator)
 
-    for _, msg in ipairs(messages) do
-        TriggerClientEvent('chat:addMessage', source, {
-            color = Config.PrefixColor,
-            multiline = true,
-            args = { msg }
-        })
-    end
+    -- 批量发送消息
+    TriggerClientEvent('chat:addMessage', source, {
+        color = Config.PrefixColor,
+        multiline = true,
+        args = { table.concat(messages, "\n") }
+    })
 end
 
-QBCore.Commands.Add('stats', "检查状态", {}, false, function(source)
+-- 清理缓存
+AddEventHandler('playerDropped', function()
+    local source = source
+    playerIdentifiers[source] = nil
+    local identifier = getPlayerIdentifier(source)
+    if identifier then
+        playTimeCache[identifier] = nil
+        lastCacheUpdate[identifier] = nil
+    end
+end)
+
+Kiriame_rpchat_addCommand('stats', {
+    help = '检查当前角色状态',
+}, function(source, args, raw)
     local Player = QBCore.Functions.GetPlayer(source)
     if not Player then
         QBCore.Functions.Notify(source, '玩家数据获取失败')
@@ -73,6 +123,7 @@ QBCore.Commands.Add('stats', "检查状态", {}, false, function(source)
 
     local identifier = getPlayerIdentifier(source)
     if not identifier then
+        QBCore.Functions.Notify(source, '无法获取玩家标识符')
         return
     end
 
@@ -84,7 +135,5 @@ QBCore.Commands.Add('stats', "检查状态", {}, false, function(source)
     end
 
     local playerName = GetPlayerCharname(source)
-    local formattedTime = getFormattedTime()
-
-    sendPlayerInfoToChat(source, formattedTime, playerName, playTimeInHours, PlayerData.job, PlayerData.gang, PlayerData.money)
-end, 'user')
+    sendPlayerInfoToChat(source, playerName, playTimeInHours, PlayerData.job, PlayerData.gang, PlayerData.money)
+end)
