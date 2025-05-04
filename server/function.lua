@@ -1,101 +1,122 @@
-local QBCore = exports['qb-core']:GetCoreObject()
+local API = exports['kiriame_rpchat']:GetAPIInterface()
 
 -- 常量定义
 local MAX_DISTANCE = 10.0
 local MESSAGE_COLOR = { 244, 237, 159 }
-local CACHE_DURATION = 300 -- 5分钟缓存时间
 
--- 缓存系统
-local Cache = {
-    playerData = {},
-    playerCoords = {},
-    lastUpdate = {}
-}
+-- 玩家数据缓存
+local PlayerDataCache = {}
+local PlayerCoordsCache = {}
 
 -- 更新玩家数据缓存
-local function KiriameRPchat_UpdatePlayerDataCache(source)
-    local currentTime = os.time()
-    local Player = QBCore.Functions.GetPlayer(source)
-    
-    if Player then
-        Cache.playerData[source] = Player.PlayerData
-        Cache.lastUpdate[source] = currentTime
-        return Player.PlayerData
-    end
-    return nil
+function KiriameRPchat_UpdatePlayerDataCache(source)
+    if not source then return end
+    PlayerDataCache[source] = API.getPlayerData(source)
 end
 
 -- 更新玩家坐标缓存
-local function KiriameRPchat_UpdatePlayerCoordsCache(source)
-    local currentTime = os.time()
-    local playerPed = GetPlayerPed(source)
-    local coords = GetEntityCoords(playerPed)
-    
-    Cache.playerCoords[source] = coords
-    Cache.lastUpdate[source] = currentTime
-    return coords
+function KiriameRPchat_UpdatePlayerCoordsCache(source)
+    if not source then return end
+    PlayerCoordsCache[source] = API.getPlayerCoords(source)
 end
 
 -- 获取缓存的玩家数据
 local function KiriameRPchat_GetCachedPlayerData(source)
-    local currentTime = os.time()
-    if Cache.playerData[source] and Cache.lastUpdate[source] and 
-       (currentTime - Cache.lastUpdate[source]) < CACHE_DURATION then
-        return Cache.playerData[source]
+    if not source then return nil end
+    if PlayerDataCache[source] then
+        return PlayerDataCache[source]
     end
     return KiriameRPchat_UpdatePlayerDataCache(source)
 end
 
 -- 获取缓存的玩家坐标
 local function KiriameRPchat_GetCachedPlayerCoords(source)
-    local currentTime = os.time()
-    if Cache.playerCoords[source] and Cache.lastUpdate[source] and 
-       (currentTime - Cache.lastUpdate[source]) < CACHE_DURATION then
-        return Cache.playerCoords[source]
+    if not source then return nil end
+    if PlayerCoordsCache[source] then
+        return PlayerCoordsCache[source]
     end
     return KiriameRPchat_UpdatePlayerCoordsCache(source)
 end
 
--- 计算两个玩家之间的距离
-function KiriameRPchat_CalculateDistance(senderid, targeterid)
-    local senderCoords = KiriameRPchat_GetCachedPlayerCoords(senderid)
-    local targetCoords = KiriameRPchat_GetCachedPlayerCoords(targeterid)
-    
-    if not senderCoords or not targetCoords then
-        return math.huge -- 返回一个很大的值表示无效距离
-    end
-    
-    return #(targetCoords - senderCoords)
-end
-
--- 获取玩家的全名
+-- 获取玩家角色名
 function KiriameRPchat_GetPlayerCharname(source)
-    local playerData = KiriameRPchat_GetCachedPlayerData(source)
-    if playerData and playerData.charinfo then
-        return string.format("%s %s", 
-            playerData.charinfo.firstname, 
-            playerData.charinfo.lastname)
-    end
-    return "未知玩家"
+    return API.getPlayerCharname(source)
 end
 
--- 触发客户端事件给附近玩家
-function KiriameRPchat_DisplayMessageToNearbyPlayers(src, message)
-    local Players = GetPlayers()
-    local srcCoords = KiriameRPchat_GetCachedPlayerCoords(src)
+-- 获取玩家工作信息
+function KiriameRPchat_GetPlayerJob(source)
+    local Player = API.getPlayerData(source)
+    if not Player then return nil end
+    return API.getPlayerJob(source)
+end
+
+-- 获取玩家帮派信息
+function KiriameRPchat_GetPlayerGang(source)
+    local Player = API.getPlayerData(source)
+    if not Player then return nil end
+    return API.getPlayerGang(source)
+end
+
+-- 获取玩家金钱信息
+function KiriameRPchat_GetPlayerMoney(source)
+    local Player = API.getPlayerData(source)
+    if not Player then return nil end
+    return API.getPlayerMoney(source)
+end
+
+-- 获取玩家坐标
+function KiriameRPchat_GetPlayerCoords(source)
+    return API.getPlayerCoords(source)
+end
+
+-- 获取玩家标识符
+function KiriameRPchat_GetPlayerIdentifier(source, type)
+    return API.getPlayerIdentifier(source, type)
+end
+
+-- 获取所有玩家
+function KiriameRPchat_GetPlayers()
+    return API.getPlayers()
+end
+
+-- 检查玩家是否存在
+function KiriameRPchat_DoesPlayerExist(source)
+    return API.doesPlayerExist(source)
+end
+
+-- 检查玩家是否有权限
+function KiriameRPchat_IsPlayerAceAllowed(source, permission)
+    return API.isPlayerAceAllowed(source, permission)
+end
+
+-- 发送通知
+function KiriameRPchat_SendNotification(source, message, type, duration)
+    API.sendNotification(source, message, type, duration)
+end
+
+-- 计算两个玩家之间的距离
+function KiriameRPchat_GetDistanceBetweenPlayers(source, target)
+    local sourceCoords = KiriameRPchat_GetPlayerCoords(source)
+    local targetCoords = KiriameRPchat_GetPlayerCoords(target)
+    return #(sourceCoords - targetCoords)
+end
+
+-- 向附近玩家显示消息
+function KiriameRPchat_DisplayMessageToNearbyPlayers(source, message, distance)
+    local sourceCoords = KiriameRPchat_GetPlayerCoords(source)
+    local players = KiriameRPchat_GetPlayers()
     
-    if not srcCoords then return end
-    
-    for _, targetid in ipairs(Players) do
-        if targetid ~= src and DoesPlayerExist(targetid) then
-            local distance = KiriameRPchat_CalculateDistance(src, targetid)
-            if distance <= MAX_DISTANCE then
-                TriggerClientEvent('kiriame_rpchat:client:shareDisplay', targetid, '*' .. message, src)
+    for _, targetid in ipairs(players) do
+        if KiriameRPchat_DoesPlayerExist(targetid) then
+            local targetCoords = KiriameRPchat_GetPlayerCoords(targetid)
+            local dist = #(sourceCoords - targetCoords)
+            
+            if dist <= distance then
+                TriggerClientEvent('kiriame_rpchat:client:receiveMessage', targetid, message)
             end
         end
     end
 end
-
 
 function KiriameRPchat_IsRestrictedFrequency(frequency)
     if not Config.RestrictChannel then return false end
@@ -131,32 +152,32 @@ function KiriameRPchat_SetRadioFrequency(source, slot, frequency)
     end
 end
 
--- 调试打印
-function KiriameRPchat_ServerDebugPrint(message)
-    if Config.Debug then
-        print(string.format("[DEBUG] %s", message))
-    end
+-- 统一的聊天消息发送函数
+function KiriameRPchat_SendChatMessage(target, message, color)
+    TriggerClientEvent('chat:addMessage', target, {
+        color = color or {255, 255, 255},
+        multiline = true,
+        args = { message }
+    })
 end
 
 -- 清理缓存
 AddEventHandler('playerDropped', function()
     local source = source
-    Cache.playerData[source] = nil
-    Cache.playerCoords[source] = nil
-    Cache.lastUpdate[source] = nil
+    PlayerDataCache[source] = nil
+    PlayerCoordsCache[source] = nil
+end)
+
+-- 玩家切换角色时清理缓存
+AddEventHandler('QBCore:Server:OnPlayerUnload', function()
+    local source = source
+    PlayerDataCache[source] = nil
+    PlayerCoordsCache[source] = nil
 end)
 
 -- 定期清理过期缓存
 CreateThread(function()
     while true do
-        local currentTime = os.time()
-        for source, lastUpdate in pairs(Cache.lastUpdate) do
-            if (currentTime - lastUpdate) > CACHE_DURATION then
-                Cache.playerData[source] = nil
-                Cache.playerCoords[source] = nil
-                Cache.lastUpdate[source] = nil
-            end
-        end
         Wait(60000) -- 每分钟检查一次
     end
 end)
@@ -210,8 +231,6 @@ local function KiriameRPchat_ParseArguments(source, args, raw, params)
         end
 
         if not value and not param.optional then
-            KiriameRPchat_ServerDebugPrint(string.format("命令 '%s' 收到无效参数 %s 用于参数 %s (%s), 收到 '%s'",
-                string.strsplit(' ', raw) or raw, param.type, i, param.name, arg))
             return nil
         end
 
@@ -249,9 +268,10 @@ function KiriameRPchat_AddCommand(commandName, properties, cb)
 
         local success, resp = pcall(cb, source, args, raw)
         if not success then
-            KiriameRPchat_ServerDebugPrint(string.format("命令 '%s' 执行失败!\n%s", 
-                string.strsplit(' ', raw) or raw, resp))
+            return false
         end
+
+        return true
     end
 
     for i = 1, numCommands do

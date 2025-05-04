@@ -80,8 +80,10 @@ local function KiriameRPchat_DisplayTextLong(ped, text)
             while display do
                 Wait(0)
                 local pos = GetOffsetFromEntityInWorldCoords(ped, 0.0, 0.0, 1.0)
-                KiriameRPchat_Draw3dText(pos, peds[ped].text)
-                display = true  -- 去掉时间检查，始终显示文本
+                if text and text ~= "" then
+                    KiriameRPchat_Draw3dText(pos, peds[ped].text)
+                end
+                display = GetGameTimer() <= peds[ped].time
             end
 
             peds[ped] = nil
@@ -101,7 +103,13 @@ local function KiriameRPchat_OnShareDisplayLong(text, target)
     local player = GetPlayerFromServerId(target)
     if player ~= -1 or target == GetPlayerServerId(PlayerId()) then
         local ped = GetPlayerPed(player)
-        KiriameRPchat_DisplayTextLong(ped, text)
+        if text and text ~= "" then
+            KiriameRPchat_DisplayTextLong(ped, text)
+        else
+            if peds[ped] then
+                peds[ped] = nil
+            end
+        end
     end
 end
 RegisterNetEvent('kiriame_rpchat:client:shareDisplay', KiriameRPchat_OnShareDisplay)

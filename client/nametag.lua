@@ -1,36 +1,32 @@
-print('Loading nametag.lua\nI Love Galgame and Xiaogao!')
+-- 全局变量
+local QBCore = exports['qb-core']:GetCoreObject()
 
--- 全局变量来存储显示名称标签的状态以及存储已创建的标签
-local showNames = true
-local gamerTags = {}
-
--- 函数来更新玩家名称标签
-local function KiriameRPchat_UpdateNametags()
-    local players = lib.callback.await('kiriame_rpchat:server:getPlayers', false)
-    for _, player in pairs(players) do
-        local playerId = GetPlayerFromServerId(player.id)
-        if playerId == -1 then goto continue end -- 如果玩家不存在，跳过当前循环
-        local ped = GetPlayerPed(playerId)
-        local name = player.gamename .. ' [' .. player.id .. ']'
-
-        if showNames then
-            if not gamerTags[player.id] then
-                -- 如果名称标签不存在，则创建一个新的
-                gamerTags[player.id] = CreateFakeMpGamerTag(ped, name, false, false, '', 0)
-            end
-        else
-            if gamerTags[player.id] then
-                -- 如果名称标签存在，则移除它
-                RemoveMpGamerTag(gamerTags[player.id])
-                gamerTags[player.id] = nil
-            end
-        end
-        ::continue::
-    end
+-- 检查玩家是否为管理员
+local function checkAdminStatus()
+    local success, result = pcall(function()
+        return lib.callback.await('kiriame_rpchat:server:isAdmin', false)
+    end)
 end
 
--- 注册事件来显示或隐藏名称标签
-RegisterNetEvent('kiriame_rpchat:client:toggleNametags', function()
-    showNames = not showNames -- 切换显示状态
-    KiriameRPchat_UpdateNametags() -- 更新名称标签
+-- 在玩家加载时检查管理员状态
+RegisterNetEvent('QBCore:Client:OnPlayerLoaded', function()
+    Wait(1000) -- 等待玩家完全加载
+    checkAdminStatus()
+end)
+
+-- 玩家退出时清理
+RegisterNetEvent('QBCore:Client:OnPlayerUnload', function()
+end)
+
+-- 添加定期检查管理员状态的机制
+CreateThread(function()
+    while true do
+        Wait(30000)
+        checkAdminStatus()
+    end
+end)
+
+-- 初始化
+CreateThread(function()
+    Wait(5000) -- 等待资源完全加载
 end)

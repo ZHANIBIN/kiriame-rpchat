@@ -1,11 +1,21 @@
 --沟槽的qbox获取 什么鸡吧获取方式，怎么IC名字还能和社区名字混在一起的司马代码都写的出来的
 
 lib.callback.register('kiriame_rpchat:server:getPlayers', function(source)
-    local useMenu = 'mod'
-    -- if not IsPlayerAceAllowed(source, useMenu) then exports.qbx_core:Notify(source, locale('error.no_perms'), 'error') return end
-
     local players = {}
-    for k, v in pairs(exports.qbx_core:GetQBPlayers()) do
+    local core = nil
+    
+    -- 尝试获取核心对象
+    if GetResourceState('qb-core') == 'started' then
+        core = exports['qb-core']:GetCoreObject()
+    elseif GetResourceState('qbx_core') == 'started' then
+        core = exports['qbx_core']:GetCoreObject()
+    end
+    
+    if not core then return players end
+    
+    -- 获取玩家列表
+    local playerList = core.Functions.GetQBPlayers()
+    for k, v in pairs(playerList) do
         players[#players + 1] = {
             id = k,
             cid = v.PlayerData.citizenid,

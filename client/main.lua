@@ -1,6 +1,4 @@
 ---@diagnostic disable: missing-parameter
-print("kiriame-rpchat loaded successfully\nGo to, let us go down, and there confound their language, that they may not understand one another's speech.")
-
 QBCore = exports['qb-core']:GetCoreObject()
 
 local Player = QBCore.Functions.GetPlayerData()
@@ -52,4 +50,32 @@ end)
 RegisterCommand('clear', function()
     TriggerEvent('chat:clear')
 end, false)
+
+-- 处理txAdmin封禁事件
+RegisterNetEvent('txAdmin:events:playerBanned')
+AddEventHandler('txAdmin:events:playerBanned', function(eventData)
+    local banMessage
+    
+    if eventData.durationTranslated == nil then
+        banMessage = string.format("管理员 %s 永久封禁了 %s 原因：%s", 
+            eventData.author, 
+            eventData.targetName, 
+            eventData.reason
+        )
+    else
+        banMessage = string.format("管理员 %s 封禁了 %s 原因：%s 结束时间：%s", 
+            eventData.author, 
+            eventData.targetName, 
+            eventData.reason,
+            eventData.durationTranslated
+        )
+    end
+    
+    -- 在聊天中显示封禁消息
+    TriggerEvent('chat:addMessage', {
+        color = {255, 0, 0}, -- 红色消息
+        multiline = true,
+        args = { banMessage }
+    })
+end)
 

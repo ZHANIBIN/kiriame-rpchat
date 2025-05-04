@@ -1,31 +1,43 @@
 fx_version 'cerulean'
 game 'gta5'
 
-author '桐雨绫华'
-description '一个基于文本的角色扮演聊天插件。是的，就这么简单'
+author 'Kiriame'
+description 'RP Chat System'
 version '1.0.0'
 lua54 'yes'
 
-client_script {
-    'client/**',
-    'client/nametag.lua'
+dependencies {
+    'ox_lib'
 }
 
-server_script {
-    '@oxmysql/lib/MySQL.lua',
-    'server/**',
-    'config.lua',
+shared_scripts {
+    '@qb-core/shared/locale.lua',
+    '@ox_lib/init.lua',
+    'config.lua'
+}
+
+client_scripts {
+    'client/*.lua'
+}
+
+server_scripts {
+    'server/api_interface.lua',
+    'server/function.lua',
+    'server/radio.lua',
+    'server/statscheck.lua',
+    'server/main.lua',
+    '@oxmysql/lib/MySQL.lua'
 }
 
 files {
     "style.css"
 }
 
-shared_script {
-    "shared/**",
-    '@ox_lib/init.lua',
-}
-
 chat_theme 'kiriame_rpchat' {
     styleSheet = 'style.css'
+}
+
+server_exports {
+    'GetAPIInterface',
+    'OverrideAPI'
 }

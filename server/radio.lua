@@ -1,184 +1,261 @@
-local QBCore = exports['qb-core']:GetCoreObject()
+local API = exports['kiriame_rpchat']:GetAPIInterface()
 local PANIC_COLOR = { 255, 0, 0 }
 local MESSAGE_COLOR = { 244, 237, 159 }
-local CACHE_DURATION = 300 -- 5分钟缓存时间
 
--- 缓存系统
+-- 定义无线电缓存
 local RadioCache = {
     playerInfo = {},
     lastUpdate = {}
 }
 
--- 检查是否是限制频率
-local function KiriameRPchat_IsRestrictedFrequency(frequency)
-    for k, v in pairs(Config.RestrictChannel) do
-        if v == frequency then
-            return true, k
-        end
-    end
-    return false, nil
-end
+-- 无线电信息缓存
+local RadioInfoCache = {}
 
 -- 获取缓存的无线电信息
 local function KiriameRPchat_GetCachedRadioInfo(citizenid)
-    local currentTime = os.time()
-    if RadioCache.playerInfo[citizenid] and RadioCache.lastUpdate[citizenid] and 
-       (currentTime - RadioCache.lastUpdate[citizenid]) < CACHE_DURATION then
-        return RadioCache.playerInfo[citizenid]
+    if not citizenid then return nil end
+    
+    -- 检查缓存是否有效（5分钟）
+    if RadioInfoCache[citizenid] and 
+       (os.time() - RadioInfoCache[citizenid].timestamp) < 300 then
+        return RadioInfoCache[citizenid].data
+    end
+    
+    -- 从数据库获取
+    local result = exports.oxmysql:query_async('SELECT RadioInfo FROM players WHERE citizenid = ?', {citizenid})
+    if result and result[1] then
+        local radioInfo = json.decode(result[1].RadioInfo)
+        RadioInfoCache[citizenid] = {
+            data = radioInfo,
+            timestamp = os.time()
+        }
+        return radioInfo
     end
     return nil
 end
 
--- 更新缓存
-local function KiriameRPchat_UpdateCache(citizenid, radioInfo)
-    RadioCache.playerInfo[citizenid] = radioInfo
-    RadioCache.lastUpdate[citizenid] = os.time()
+-- 检查频率是否受限
+local function KiriameRPchat_IsRestrictedFrequency(frequency)
+    local restrictedFrequencies = Config.RestrictedFrequencies or {}
+    return restrictedFrequencies[frequency] or false
 end
 
 -- 初始化或更新无线电信息
-local function KiriameRPchat_InitializeOrUpdateRadioInfo(radioInfo, slot, frequency, citizenid, src, jobType)
+local function KiriameRPchat_InitializeOrUpdateRadioInfo(source, channelSlot, frequency)
+    local Player = API.getPlayerData(source)
+    if not Player then return false end
+    
+    local citizenid = API.getPlayerIdentifier(source, 'license')
+    if not citizenid then return false end
+    
+    local radioInfo = KiriameRPchat_GetCachedRadioInfo(citizenid) or {
+        radiochannel = {},
+        radiodepartment = { { id = 1, value = "none" } }
+    }
+    
+    -- 检查频率是否受限
+    if KiriameRPchat_IsRestrictedFrequency(frequency) then
+        local job = API.getPlayerJob(source)
+        if not job or not Config.AllowedJobs[job.name] then
+            API.sendNotification(source, '你没有权限使用这个频率', 'error')
+            return false
+        end
+    end
+    
+    -- 更新频道信息
     if not radioInfo.radiochannel then
         radioInfo.radiochannel = {}
-        for i = 1, 10 do
-            table.insert(radioInfo.radiochannel, { id = i, value = -1 })
-        end
     end
     
-    local slotUpdated = false
-    for _, channel in ipairs(radioInfo.radiochannel) do
-        if channel.id == slot then
-            channel.value = frequency
-            slotUpdated = true
-            break
-        end
+    -- 确保频道槽位存在
+    while #radioInfo.radiochannel < channelSlot do
+        table.insert(radioInfo.radiochannel, { id = #radioInfo.radiochannel + 1, value = -1 })
     end
     
-    if not slotUpdated then
-        table.insert(radioInfo.radiochannel, { id = slot, value = frequency })
-    end
+    -- 更新指定频道的频率
+    radioInfo.radiochannel[channelSlot].value = frequency
     
-    local isRestricted, foundKey = KiriameRPchat_IsRestrictedFrequency(frequency)
-    if isRestricted then
-        if jobType == "leo" then
-            MySQL.update('UPDATE players SET RadioInfo = ? WHERE citizenid = ?', {
-                json.encode(radioInfo),
-                citizenid
-            }, function(affectedRows)
-                if affectedRows > 0 then
-                    KiriameRPchat_UpdateCache(citizenid, radioInfo)
-                    TriggerClientEvent('kiriame_rpchat:client:setRadioFrequency', src, slot, frequency)
-                end
-            end)
-        else
-            TriggerClientEvent('QBCore:Notify', src, "你无法加入一个被加密的频道！", 'warn', 5000)
-        end
-    else
-        MySQL.update('UPDATE players SET RadioInfo = ? WHERE citizenid = ?', {
-            json.encode(radioInfo),
-            citizenid
-        }, function(affectedRows)
-            if affectedRows > 0 then
-                KiriameRPchat_UpdateCache(citizenid, radioInfo)
-                TriggerClientEvent('kiriame_rpchat:client:setRadioFrequency', src, slot, frequency)
-            end
-        end)
-    end
+    -- 更新缓存
+    RadioInfoCache[citizenid] = {
+        data = radioInfo,
+        timestamp = os.time()
+    }
+    
+    -- 更新数据库
+    exports.oxmysql:update('UPDATE players SET RadioInfo = ? WHERE citizenid = ?', {
+        json.encode(radioInfo),
+        citizenid
+    })
+    
+    return true
 end
 
+-- 设置频率命令
 KiriameRPchat_AddCommand('setfrequency', {
     help = '设置无线电频率',
     params = {
-        { name = 'slot', type = 'number', help = '频道槽位' },
+        { name = 'channelSlot', type = 'number', help = '频道槽位' },
         { name = 'frequency', type = 'number', help = '频率值' }
-    },
+    }
 }, function(source, args)
-    -- local src = source
-    local Player = QBCore.Functions.GetPlayer(source)
-    if not Player then return end
-    
-    local jobType = Player.PlayerData.job.type
-    local citizenid = Player.PlayerData.citizenid
-    
-    -- 检查缓存
-    local cachedInfo = KiriameRPchat_GetCachedRadioInfo(citizenid)
-    if cachedInfo then
-        KiriameRPchat_InitializeOrUpdateRadioInfo(cachedInfo, args.slot, args.frequency, citizenid, source, jobType)
+    if not args.channelSlot or not args.frequency then
+        API.sendNotification(source, '用法: /setfrequency [频道槽位] [频率]', 'error')
         return
     end
     
-    MySQL.query('SELECT RadioInfo FROM players WHERE `citizenid` = ?', { citizenid }, function(results)
-        if results and #results > 0 then
-            local radioInfo = json.decode(results[1].RadioInfo or '{}')
-            KiriameRPchat_InitializeOrUpdateRadioInfo(radioInfo, args.slot, args.frequency, citizenid, source, jobType)
-        else
-            local defaultRadioInfo = {
-                radiochannel = { { id = args.slot, value = args.frequency } },
-                radiodepartment = { { id = 1, value = "none" } }
-            }
-            MySQL.insert('INSERT INTO players (citizenid, RadioInfo) VALUES (?, ?)', {
-                citizenid,
-                json.encode(defaultRadioInfo)
-            }, function(insertId)
-                if insertId then
-                    KiriameRPchat_UpdateCache(citizenid, defaultRadioInfo)
-                    TriggerClientEvent('kiriame_rpchat:client:setRadioFrequency', source, args.slot, args.frequency)
-                end
-            end)
-        end
-    end)
+    if KiriameRPchat_InitializeOrUpdateRadioInfo(source, args.channelSlot, args.frequency) then
+        API.sendNotification(source, '频率设置成功', 'success')
+    end
 end)
 
-KiriameRPchat_AddCommand('dep', { 
+-- 部门呼叫命令
+KiriameRPchat_AddCommand('dep', {
     help = '部门呼叫',
-    params = { { name = 'chat', type = 'text', help = '部门名称' } } 
+    params = {
+        { name = 'message', type = 'text', help = '要发送的消息' }
+    }
 }, function(source, args, raw)
-    TriggerClientEvent('kiriame_rpchat:client:departmentMessage', source, string.sub(raw, 4))
+    local Player = API.getPlayerData(source)
+    if not Player then return end
+
+    local message = string.sub(raw, 5) -- 移除 "/dep " 前缀
+    if not message or message == "" then
+        TriggerClientEvent('QBCore:Notify', source, "请输入要发送的消息", 'error')
+        return
+    end
+
+    -- 获取发送者的目标部门
+    local targetDepartment = Player.PlayerData.metadata.targetDepartment
+    if not targetDepartment then
+        TriggerClientEvent('QBCore:Notify', source, "请先使用 /setdep 设置目标部门", 'error')
+        return
+    end
+
+    local data = {
+        department = targetDepartment, -- 使用目标部门而不是发送者的职业
+        message = message,
+        source = source,
+        senderJob = Player.PlayerData.job.name -- 添加发送者的职业信息
+    }
+
+    TriggerEvent('kiriame_rpchat:server:broadcastToDepartment', data)
 end)
 
 for i = 1, 10 do
-    KiriameRPchat_AddCommand('r' .. i, { 
+    KiriameRPchat_AddCommand('r' .. i, {
         help = '无线电通信',
-        params = { { name = 'message', type = 'text', help = '消息内容' } } 
+        params = { { name = 'message', type = 'text', help = '消息内容' } }
     }, function(source, args, raw)
         TriggerClientEvent('kiriame_rpchat:client:talkOnRadio', source, i, string.sub(raw, 4), source)
+
+        local message = string.sub(raw, 4)
+        local sourcePlayer = API.getPlayerData(source)
+        if not sourcePlayer then return end
+        
+        local sourceCoords = sourcePlayer.PlayerData.position
+        local sourceName = sourcePlayer.PlayerData.charinfo.firstname .. " " .. sourcePlayer.PlayerData.charinfo.lastname
+        
+        local players = GetPlayers()
+        for _, playerId in ipairs(players) do
+            if playerId ~= source then
+                local Player = API.getPlayerData(playerId)
+                if Player then
+                    local playerCoords = Player.PlayerData.position
+                    local distance = #(vector3(sourceCoords.x, sourceCoords.y, sourceCoords.z) - vector3(playerCoords.x, playerCoords.y, playerCoords.z))
+                    
+                    if distance <= 30.0 then
+                        TriggerClientEvent('chat:addMessage', playerId, {
+                            color = MESSAGE_COLOR,
+                            multiline = true,
+                            args = {string.format("(无线电) %s 说: %s", sourceName, message)}
+                        })
+                    end
+                end
+            end
+        end
     end)
 end
 
-KiriameRPchat_AddCommand('panic', { 
+KiriameRPchat_AddCommand('panic', {
     help = '紧急按钮',
-    params = {} 
-}, function(source)
-    TriggerClientEvent('kiriame_rpchat:client:policePanic', source)
-end)
-
-KiriameRPchat_AddCommand('setdep', {
-    help = '设置部门',
-    params = { { name = 'department', type = 'string', help = '部门名称' } }
-}, function(source, args)
-    TriggerClientEvent('kiriame_rpchat:client:setDepartment', source, args.department)
-end)
-
-RegisterServerEvent('kiriame_rpchat:server:printRadioMessage')
-AddEventHandler('kiriame_rpchat:server:printRadioMessage', function(key, frequency, message, SenderTargetPlayerID)
-    local isRestricted, foundKey = KiriameRPchat_IsRestrictedFrequency(frequency)
-    local messageFormat = isRestricted and 
-        " ** [S:%d | CH:%s] %s :%s" or 
-        " ** [S:%d | CH:%d] %s :%s"
+    params = {{ name = 'message', type = 'text', help = '消息内容' }}
+}, function(source, args, raw)
+    local message = string.sub(raw, 4)
+    local sourcePlayer = API.getPlayerData(source)
+    if not sourcePlayer then return end
     
+    local sourceCoords = sourcePlayer.PlayerData.position
+    local sourceName = sourcePlayer.PlayerData.charinfo.firstname .. " " .. sourcePlayer.PlayerData.charinfo.lastname
+    
+    local players = GetPlayers()
+    for _, playerId in ipairs(players) do
+        if playerId ~= source then
+            local Player = API.getPlayerData(playerId)
+            if Player then
+                local playerCoords = Player.PlayerData.position
+                local distance = #(vector3(sourceCoords.x, sourceCoords.y, sourceCoords.z) - vector3(playerCoords.x, playerCoords.y, playerCoords.z))
+                
+                if distance <= 30.0 then
+                    TriggerClientEvent('chat:addMessage', playerId, {
+                        color = PANIC_COLOR,
+                        multiline = true,
+                        args = {"紧急", string.format("[%s] 触发了紧急按钮: %s", sourceName, message)}
+                    })
+                end
+            end
+        end
+    end
+end)
+
+-- 部门设置命令
+KiriameRPchat_AddCommand('setdep', {
+    help = '设置目标部门',
+    params = {
+        { name = 'department', type = 'string', help = '部门名称' }
+    }
+}, function(source, args)
+    local Player = API.getPlayerData(source)
+    if not Player then return end
+
+    if not args.department then
+        TriggerClientEvent('QBCore:Notify', source, "请指定部门名称", 'error')
+        return
+    end
+
+    -- 将目标部门保存到玩家的元数据中
+    Player.Functions.SetMetaData('targetDepartment', args.department)
+    TriggerClientEvent('QBCore:Notify', source, string.format("已设置目标部门为: %s", args.department), 'success')
+end)
+
+RegisterNetEvent('kiriame_rpchat:server:printRadioMessage')
+AddEventHandler('kiriame_rpchat:server:printRadioMessage', function(key, frequency, message, SenderTargetPlayerID, slot, senderName)
+    local foundKey = nil
+    -- 检查频率是否在配置中有对应的键
+    for configKey, configFreq in pairs(Config.RestrictChannel or {}) do
+        if configFreq == frequency then
+            foundKey = configKey
+            break
+        end
+    end
+
+    local displayValue = foundKey or frequency
+    local messageFormat = " ** [S:%d | CH:%s] %s :%s"
+
     TriggerClientEvent('chatMessage', source,
-        string.format(messageFormat, key, foundKey or frequency, KiriameRPchat_GetPlayerCharname(SenderTargetPlayerID), message),
+        string.format(messageFormat, key, displayValue, senderName or API.getPlayerCharname(SenderTargetPlayerID),
+            message),
         MESSAGE_COLOR)
 end)
 
-RegisterServerEvent('kiriame_rpchat:server:policePanic')
+RegisterNetEvent('kiriame_rpchat:server:policePanic')
 AddEventHandler('kiriame_rpchat:server:policePanic', function(streetName, jobgradelabel, src)
     TriggerClientEvent('chatMessage', src,
-        string.format(" %s %s 位于 %s 触发了紧急按钮！", 
-            jobgradelabel, KiriameRPchat_GetPlayerCharname(src), streetName),
+        string.format(" %s %s 位于 %s 触发了紧急按钮！",
+            jobgradelabel, API.getPlayerCharname(src), streetName),
         PANIC_COLOR)
 end)
 
-RegisterServerEvent('kiriame_rpchat:server:radioTalk')
+RegisterNetEvent('kiriame_rpchat:server:radioTalk')
 AddEventHandler('kiriame_rpchat:server:radioTalk', function(source, message)
     if not message or message == '' then return end
     local players = GetPlayers()
@@ -187,20 +264,25 @@ AddEventHandler('kiriame_rpchat:server:radioTalk', function(source, message)
     end
 end)
 
+-- RegisterCommand('radioinfo', function(source)
+--     TriggerEvent('kiriame_rpchat:server:getPlayerRadioInfo', source, source)
+-- end)
+KiriameRPchat_AddCommand('radioinfo', {
+    help = 'radioinfotest',
+    params = {}
+}, function(source)
+    TriggerEvent('kiriame_rpchat:server:getPlayerRadioInfo', source, source)
+end)
 RegisterNetEvent('QBCore:Server:OnPlayerLoaded')
 AddEventHandler('QBCore:Server:OnPlayerLoaded', function()
     local src = source
-    TriggerEvent('kiriame_rpchat:server:getPlayerRadioInfo', src)
+    TriggerEvent('kiriame_rpchat:server:getPlayerRadioInfo', src, src)
 end)
 
-RegisterCommand('radioinfo', function(source)
-    TriggerEvent('kiriame_rpchat:server:getPlayerRadioInfo', source, source)
-end)
-
-RegisterServerEvent('kiriame_rpchat:server:getPlayerRadioInfo')
+RegisterNetEvent('kiriame_rpchat:server:getPlayerRadioInfo')
 AddEventHandler('kiriame_rpchat:server:getPlayerRadioInfo', function(TargetPlayerID)
     local requesterId = source
-    local Player = QBCore.Functions.GetPlayer(TargetPlayerID)
+    local Player = API.getPlayerData(TargetPlayerID)
     
     if not Player then 
         TriggerClientEvent('kiriame_rpchat:client:receiveRadioInfo', requesterId, { error = "未找到玩家数据" })
@@ -209,19 +291,7 @@ AddEventHandler('kiriame_rpchat:server:getPlayerRadioInfo', function(TargetPlaye
 
     local citizenid = Player.PlayerData.citizenid
     
-    -- 检查缓存
-    local cachedInfo = KiriameRPchat_GetCachedRadioInfo(citizenid)
-    if cachedInfo then
-        local simplifiedData = {
-            id = TargetPlayerID,
-            channel = cachedInfo.radiochannel,
-            dep = cachedInfo.radiodepartment[1].value
-        }
-        TriggerClientEvent('kiriame_rpchat:client:receiveRadioInfo', requesterId, simplifiedData)
-        return
-    end
-    
-    MySQL.query('SELECT RadioInfo FROM players WHERE `citizenid` = ?', { citizenid }, function(results)
+    exports.oxmysql:query('SELECT RadioInfo FROM players WHERE `citizenid` = ?', { citizenid }, function(results)
         if not results then
             TriggerClientEvent('kiriame_rpchat:client:receiveRadioInfo', requesterId, { error = "数据库查询失败" })
             return
@@ -236,12 +306,11 @@ AddEventHandler('kiriame_rpchat:server:getPlayerRadioInfo', function(TargetPlaye
                 table.insert(defaultRadioInfo.radiochannel, { id = i, value = -1 })
             end
 
-            MySQL.insert('INSERT INTO players (citizenid, RadioInfo) VALUES (?, ?)', {
+            exports.oxmysql:insert('INSERT INTO players (citizenid, RadioInfo) VALUES (?, ?)', {
                 citizenid,
                 json.encode(defaultRadioInfo)
             }, function(insertId)
                 if insertId then
-                    KiriameRPchat_UpdateCache(citizenid, defaultRadioInfo)
                     local simplifiedData = {
                         id = TargetPlayerID,
                         channel = defaultRadioInfo.radiochannel,
@@ -264,7 +333,6 @@ AddEventHandler('kiriame_rpchat:server:getPlayerRadioInfo', function(TargetPlaye
                 radioInfo.radiodepartment = { { id = 1, value = "none" } }
             end
             
-            KiriameRPchat_UpdateCache(citizenid, radioInfo)
             local simplifiedData = {
                 id = TargetPlayerID,
                 channel = radioInfo.radiochannel,
@@ -279,7 +347,18 @@ end)
 -- 清理缓存
 AddEventHandler('playerDropped', function()
     local source = source
-    local Player = QBCore.Functions.GetPlayer(source)
+    local Player = API.getPlayerData(source)
+    if Player then
+        local citizenid = Player.PlayerData.citizenid
+        RadioCache.playerInfo[citizenid] = nil
+        RadioCache.lastUpdate[citizenid] = nil
+    end
+end)
+
+-- 玩家切换角色时清理缓存
+AddEventHandler('QBCore:Server:OnPlayerUnload', function()
+    local source = source
+    local Player = API.getPlayerData(source)
     if Player then
         local citizenid = Player.PlayerData.citizenid
         RadioCache.playerInfo[citizenid] = nil
@@ -293,15 +372,93 @@ AddEventHandler('kiriame_rpchat:server:broadcastToDepartment', function(data)
     if not data or not data.department or not data.message then
         return
     end
-    
+
+    -- 获取发送者信息
+    local sourcePlayer = API.getPlayerData(data.source)
+    if not sourcePlayer then return end
+
     -- 获取所有玩家
-    local players = QBCore.Functions.GetPlayers()
-    
+    local players = API.getPlayers()
+
     -- 遍历所有玩家并发送消息给对应部门的玩家
     for _, playerId in ipairs(players) do
-        local player = QBCore.Functions.GetPlayer(playerId)
-        if player and player.PlayerData.job.name == data.department then
-            TriggerClientEvent('kiriame_rpchat:client:receiveDepartmentBroadcast', playerId, data)
+        local player = API.getPlayerData(playerId)
+        if player then
+            local messageData = {
+                department = data.department,
+                message = data.message,
+                source = data.source,
+                senderName = sourcePlayer.PlayerData.charinfo.firstname .. " " .. sourcePlayer.PlayerData.charinfo.lastname,
+                senderJob = sourcePlayer.PlayerData.job.name -- 使用发送者的实际职业
+            }
+            
+            -- 如果是目标部门的玩家或者是发送者自己，都发送消息
+            if player.PlayerData.job.name == data.department or playerId == data.source then
+                TriggerClientEvent('kiriame_rpchat:client:receiveDepartmentBroadcast', playerId, messageData)
+            end
         end
     end
 end)
+
+RegisterNetEvent('kiriame_rpchat:server:radioMessage')
+AddEventHandler('kiriame_rpchat:server:radioMessage', function(data)
+    if not data or not data.frequency or not data.message then return end
+    
+    local players = GetPlayers()
+    local sourcePlayer = API.getPlayerData(data.source)
+    if not sourcePlayer then return end
+    
+    local sourceCoords = sourcePlayer.PlayerData.position
+    local sourceName = sourcePlayer.PlayerData.charinfo.firstname .. " " .. sourcePlayer.PlayerData.charinfo.lastname
+    
+    for _, playerId in ipairs(players) do
+        -- 忽略发送者自己
+        if playerId ~= data.source then
+            local Player = API.getPlayerData(playerId)
+            if Player then
+                local citizenid = Player.PlayerData.citizenid
+                local cachedInfo = KiriameRPchat_GetCachedRadioInfo(citizenid)
+                local playerCoords = Player.PlayerData.position
+                
+                -- 检查玩家是否在附近（30单位范围内）
+                local distance = #(vector3(sourceCoords.x, sourceCoords.y, sourceCoords.z) - vector3(playerCoords.x, playerCoords.y, playerCoords.z))
+                local isNearby = distance <= 30.0
+                
+                -- 检查玩家是否在相同频率上
+                local isOnSameFrequency = false
+                if cachedInfo then
+                    for _, channel in ipairs(cachedInfo.radiochannel) do
+                        if channel.value == data.frequency then
+                            isOnSameFrequency = true
+                            break
+                        end
+                    end
+                end
+                
+                -- 如果在相同频率上，只发送无线电消息
+                if isOnSameFrequency then
+                    TriggerClientEvent('kiriame_rpchat:client:radioMessageReceived', playerId, {
+                        frequency = data.frequency,
+                        message = data.message,
+                        source = data.source,
+                        slot = data.slot,
+                        senderName = sourceName,
+                        messageType = "radio" -- 标记为无线电消息
+                    })
+                -- 如果不在相同频率上但在30米范围内，发送说话消息
+                -- elseif isNearby then
+                --     TriggerClientEvent('kiriame_rpchat:client:radioMessageReceived', playerId, {
+                --         frequency = data.frequency,
+                --         message = data.message,
+                --         source = data.source,
+                --         slot = data.slot,
+                --         senderName = sourceName,
+                --         messageType = "proximity" -- 标记为说话消息
+                --     })
+                end
+            end
+        end
+    end
+end)
+
+

@@ -39,12 +39,3 @@ function KiriameRPchat_DisplayTextToPlayer(text)
         IsDisplayingText = false
     end
 end
-
-function KiriameRPchat_ClientDebugPrint(message)
-    local Debug = false
-    if Debug then
-        print(message)
-    else
-        return
-    end
-end

@@ -1,61 +1,46 @@
 local QBCore = exports['qb-core']:GetCoreObject()
+local API = exports['kiriame_rpchat']:GetAPIInterface()
 
--- 缓存玩家标识符
-local playerIdentifiers = {}
+-- 玩家标识符缓存
+local PlayerIdentifierCache = {}
 
--- 获取玩家的标识符（带缓存）
-local function getPlayerIdentifier(source)
-    if playerIdentifiers[source] then
-        return playerIdentifiers[source]
+-- 获取玩家标识符
+function KiriameRPchat_GetPlayerIdentifier(source)
+    if not source then return nil end
+    
+    if PlayerIdentifierCache[source] then
+        return PlayerIdentifierCache[source]
     end
     
-    for _, id in ipairs(GetPlayerIdentifiers(source)) do
-        if string.sub(id, 1, string.len("license:")) == "license:" then
-            playerIdentifiers[source] = id
-            return id
-        end
+    local identifier = KiriameRPchat_API.getPlayerIdentifier(source, 'license')
+    if identifier then
+        PlayerIdentifierCache[source] = identifier
     end
-    return nil
+    
+    return identifier
 end
 
--- 缓存玩家游戏时间
-local playTimeCache = {}
-local CACHE_DURATION = 300 -- 5分钟缓存时间
-local lastCacheUpdate = {}
-
--- 获取玩家的游戏时间（带缓存）
-local function getPlayerPlayTime(identifier)
-    local currentTime = os.time()
+-- 获取玩家游戏时间
+function KiriameRPchat_GetPlayerPlayTime(source)
+    local identifier = KiriameRPchat_GetPlayerIdentifier(source)
+    if not identifier then return 0 end
     
-    if playTimeCache[identifier] and lastCacheUpdate[identifier] and 
-       (currentTime - lastCacheUpdate[identifier]) < CACHE_DURATION then
-        return playTimeCache[identifier]
-    end
-    
-    local response = MySQL.query.await('SELECT `time` FROM `playtime` WHERE `identifier` = ?', { identifier })
-    local playTime = 0
-    if response and #response > 0 then
-        playTime = response[1].time / 3600
-    end
-    
-    playTimeCache[identifier] = playTime
-    lastCacheUpdate[identifier] = currentTime
-    return playTime
+    local result = MySQL.Sync.fetchScalar('SELECT time FROM playtime WHERE identifier = ?', {identifier})
+    return tonumber(result) or 0
 end
 
 -- 预定义消息模板
 local MESSAGE_TEMPLATES = {
-    header = " %s个人信息",
-    separator = " ========================================= ",
-    id = " ID: %s",
-    playtime = " 游戏时间: %d 小时",
-    job = " 工作: %s (级别: %s, 是否在职: %s)",
-    noJob = " 工作: None",
-    gang = " 帮派: %s (级别: %s)",
-    noGang = " 帮派: 没有",
-    cash = " 现金: %d",
-    bank = " 银行: %d",
-    noMoney = " 现金: 0\n 银行: 0"
+    header = "^1%s个人信息",
+    separator = "^1=========================================",
+    id = "^1ID: ^3%s",
+    playtime = "^1游戏时间: ^3%d小时",
+    job = "^1工作: ^3%s (级别: ^3%s^1, 是否在职: ^3%s^1)",
+    noJob = "^1工作: ^3None",
+    gang = "^1帮派: ^3%s (级别: ^3%s^1)",
+    noGang = "^1帮派: ^3没有",
+    money = "^1现金: ^3%d ^1| 银行: ^3%d",
+    noMoney = "^1现金: ^30 ^1| 银行: ^30"
 }
 
 -- 发送玩家信息到聊天（优化版）
@@ -85,8 +70,7 @@ local function sendPlayerInfoToChat(source, playerName, playTimeInHours, job, ga
     end
 
     if money then
-        table.insert(messages, string.format(MESSAGE_TEMPLATES.cash, money['cash'] or 0))
-        table.insert(messages, string.format(MESSAGE_TEMPLATES.bank, money['bank'] or 0))
+        table.insert(messages, string.format(MESSAGE_TEMPLATES.money, money['cash'] or 0, money['bank'] or 0))
     else
         table.insert(messages, MESSAGE_TEMPLATES.noMoney)
     end
@@ -104,36 +88,52 @@ end
 -- 清理缓存
 AddEventHandler('playerDropped', function()
     local source = source
-    playerIdentifiers[source] = nil
-    local identifier = getPlayerIdentifier(source)
-    if identifier then
-        playTimeCache[identifier] = nil
-        lastCacheUpdate[identifier] = nil
-    end
+    PlayerIdentifierCache[source] = nil
 end)
 
-Kiriame_rpchat_addCommand('stats', {
-    help = '检查当前角色状态',
+-- 统计命令
+KiriameRPchat_AddCommand('stats', {
+    help = '查看玩家统计信息',
+    params = {}
 }, function(source, args, raw)
-    local Player = QBCore.Functions.GetPlayer(source)
-    if not Player then
-        QBCore.Functions.Notify(source, '玩家数据获取失败')
-        return
+    local Player = KiriameRPchat_API.getPlayerData(source)
+    if not Player then return end
+    
+    local charname = KiriameRPchat_API.getPlayerCharname(source)
+    local playtime = KiriameRPchat_GetPlayerPlayTime(source)
+    local job = KiriameRPchat_API.getPlayerJob(source)
+    local gang = KiriameRPchat_API.getPlayerGang(source)
+    local money = KiriameRPchat_API.getPlayerMoney(source)
+    
+    -- 构建消息
+    local messages = {
+        string.format("^1角色名: ^3%s", charname),
+        string.format("^1游戏时间: ^3%d小时", playtime)
+    }
+    
+    if job then
+        table.insert(messages, string.format("^1工作: ^3%s (级别: ^3%s^1, 是否在职: ^3%s^1)", 
+            job.label, 
+            job.grade.name, 
+            job.onduty and "是" or "不是"))
     end
-
-    local identifier = getPlayerIdentifier(source)
-    if not identifier then
-        QBCore.Functions.Notify(source, '无法获取玩家标识符')
-        return
+    
+    if gang then
+        table.insert(messages, string.format("^1帮派: ^3%s (级别: ^3%s^1)", 
+            gang.label, 
+            gang.grade.name))
     end
-
-    local playTimeInHours = getPlayerPlayTime(identifier)
-    local PlayerData = Player.PlayerData
-    if not PlayerData then
-        QBCore.Functions.Notify(source, '玩家数据获取失败')
-        return
+    
+    if money then
+        table.insert(messages, string.format("^1现金: ^3%d ^1| 银行: ^3%d", 
+            money['cash'] or 0, 
+            money['bank'] or 0))
     end
-
-    local playerName = GetPlayerCharname(source)
-    sendPlayerInfoToChat(source, playerName, playTimeInHours, PlayerData.job, PlayerData.gang, PlayerData.money)
+    
+    -- 发送到聊天框
+    TriggerClientEvent('chat:addMessage', source, {
+        color = Config.PrefixColor,
+        multiline = true,
+        args = { table.concat(messages, "\n") }
+    })
 end)
